@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 class Checker:
     # 1 = white, 0 = black
-    def __init__(self, tile_size , resolution):
+    def __init__(self, resolution, tile_size):
         assert resolution % (2*tile_size) == 0, \
             "Resolution must be divisible by 2*tile size"
         self.tile_size = tile_size
@@ -22,9 +22,11 @@ class Checker:
         
         # scale pattern to tile size
         mask = np.ones((self.tile_size, self.tile_size))
-        pattern = np.kron(pattern, mask)
+        pattern = np.kron(pattern, mask) # https://de.wikipedia.org/wiki/Kronecker-Produkt
 
         self.output = pattern
+
+        return self.output.copy()
 
     def show(self):
         if self.output is None:
