@@ -39,7 +39,7 @@ class Checker:
 
 
 class Circle:
-    #0 = black, 1=white
+    # 0 = black, 1=white
     def __init__(self, resolution, radius, position):
         self.output = None
         self.resolution = resolution
@@ -47,14 +47,17 @@ class Circle:
         self.position = position
 
     def draw(self):
-        #create meshgrid from two arrays
+        # create x and y values for position as center point of the circle
         x0, y0 = self.position
         radius = self.radius
 
+        # create meshgrid to function as coordinate system
         X, Y = np.meshgrid(np.arange(self.resolution), np.arange(self.resolution))
 
+        # pythagoras law, calculates the distance
         distance = np.sqrt((X-x0)**2 + (Y-y0)**2)
 
+        # if point is inside radius --> 1, otherwise 0
         mask = (distance <= radius).astype(int)
 
         self.output = mask
@@ -69,4 +72,3 @@ class Circle:
         plt.axis('off')
         plt.title(f"Binary Circle")
         plt.show()
-
