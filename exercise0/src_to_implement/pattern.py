@@ -51,7 +51,7 @@ class Circle:
         x0, y0 = self.position
         radius = self.radius
 
-        Y, X = np.meshgrid(np.arange(self.resolution), np.arange(self.resolution))
+        X, Y = np.meshgrid(np.arange(self.resolution), np.arange(self.resolution))
 
         distance = np.sqrt((X-x0)**2 + (Y-y0)**2)
 

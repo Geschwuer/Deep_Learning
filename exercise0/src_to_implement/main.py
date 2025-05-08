@@ -1,4 +1,4 @@
-from pattern import Checker
+from pattern import Checker, Circle
 
 
 
@@ -8,9 +8,9 @@ def main():
     checker.draw()
     checker.show()
 
-    # circle = Circle(100, 10, (50, 50))
-    # circle.draw()
-    # circle.show()
+    circle = Circle(1000, 100, (20, 500))
+    circle.draw()
+    circle.show()
 
 if __name__ == "__main__":
     main()
