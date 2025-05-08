@@ -30,6 +30,7 @@ venv/
 *.pth
 *.joblib
 *.npz
+*.zip
 
 # Anaconda Umgebungsdateien (wenn auto-generiert)
 *.yaml
