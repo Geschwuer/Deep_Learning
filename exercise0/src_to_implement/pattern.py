@@ -72,3 +72,38 @@ class Circle:
         plt.axis('off')
         plt.title(f"Binary Circle")
         plt.show()
+
+
+class Spectrum:
+    def __init__(self, resolution):
+        self.resolution = resolution
+        self.output = None
+
+    def draw(self):
+    # image is a 2D array of shape (resolution, resolution, 3)
+    # RGB values are in the range [0, 1]
+        ls = np.linspace(0.0, 1.0, self.resolution)
+        x, y = np.meshgrid(ls, ls)
+
+        # x increases from left to right --> red
+        # y increases from top to bottom --> green
+        # blue increases from right to left --> inverse red
+        R = x
+        B = 1-x
+        G = y
+
+        # stack matrices on top of each other
+        spectrum = np.stack((R, G, B), axis=2) # shape (resolution, resolution, 3)
+
+        self.output = spectrum
+
+        return self.output.copy()
+
+    def show(self):
+        if self.output is None:
+            raise ValueError("You need to call draw() before show()")
+        
+        plt.imshow(self.output, cmap = "gray")
+        plt.axis('off')
+        plt.title(f"Binary Circle")
+        plt.show()
