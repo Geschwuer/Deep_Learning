@@ -72,3 +72,27 @@ class Circle:
         plt.axis('off')
         plt.title(f"Binary Circle")
         plt.show()
+
+class Spectrum:
+    def __init__(self, resolution):
+        self.resolution = resolution
+        self.output = None
+    
+    def draw(self):
+        x1 = np.linspace(1, 0, self.resolution)
+        x2 = np.linspace(0, 1, self.resolution)
+
+        B, G = np.meshgrid(x1, x2)
+        R, irrelevant = np.meshgrid(x2, x1)
+
+        # axis = 2 parameter, because RGB_pic should have format like: [n_rows, n_columns, 3]
+        RGB_pic = np.stack([R, G, B], axis = 2)
+
+        self.output = RGB_pic
+
+        return self.output.copy()
+    
+    def show(self):
+        plt.imshow(self.output)
+        plt.axis('off')
+        plt.show()
