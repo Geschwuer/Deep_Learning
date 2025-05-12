@@ -1,6 +1,8 @@
 import os.path
 import json
 import scipy.misc
+from skimage.transform import resize
+from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -8,7 +10,7 @@ import matplotlib.pyplot as plt
 # This next function returns the next generated object. In our case it returns the input of a neural network each time it gets called.
 # This input consists of a batch of images and its corresponding labels.
 class ImageGenerator:
-    def __init__(self, file_path, label_path, batch_size, image_size, rotation=False, mirroring=False, shuffle=False):
+    def __init__(self, file_path : str, label_path:str, batch_size:str, image_size:list, rotation:bool=False, mirroring:bool=False, shuffle:bool=False):
         # Define all members of your generator class object as global members here.
         # These need to include:
         # the batch size
@@ -21,6 +23,14 @@ class ImageGenerator:
         self.class_dict = {0: 'airplane', 1: 'automobile', 2: 'bird', 3: 'cat', 4: 'deer', 5: 'dog', 6: 'frog',
                            7: 'horse', 8: 'ship', 9: 'truck'}
         #TODO: implement constructor
+        self.file_path = file_path
+        self.label_path = label_path
+        self.batch_size = batch_size
+        self.image_size = image_size
+
+        self.rotation = rotation
+        self.mirroring = mirroring
+        self.shuffle = shuffle
 
     def next(self):
         # This function creates a batch of images and corresponding labels and returns them.
@@ -28,8 +38,43 @@ class ImageGenerator:
         # Note that your amount of total data might not be divisible without remainder with the batch_size.
         # Think about how to handle such cases
         #TODO: implement next method
-        pass
-        #return images, labels
+
+        # resize image
+        
+
+
+        with open(self.label_path) as labels_file:
+            labels = json.load(labels_file)
+        
+        # list of all files
+        file_paths = os.listdir(self.file_path)
+
+        total_paths = [] # abosolute paths of all .npy files
+        file_names = [] # list of all file names without file ending --> e.g. "3"
+
+        for file in file_paths:
+            total_paths.append(os.path.join(self.file_path, file))
+            file_name = os.path.splitext(file)[0]
+            file_names.append(file_name)
+
+
+        current_index = 0
+        current_batch = total_paths[current_index:self.batch_size]  # paths for images in current batch
+        current_batch_label = file_names[current_index:self.batch_size] # file names for labels in current batch (file names)
+
+        current_index = current_index + self.batch_size
+
+        images_batch = [] # all images in current batch
+        labels_batch = [] # all labels in current batch
+        for file_path, batch_label_index in zip(current_batch, current_batch_label):
+            batch_file = np.load(file_path)
+
+            images_batch.append(batch_file)
+            labels_batch.append(labels[batch_label_index])
+
+        return_batch = (images_batch, labels_batch)
+        return return_batch
+
 
     def augment(self,img):
         # this function takes a single image as an input and performs a random transformation
