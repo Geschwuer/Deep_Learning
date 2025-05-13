@@ -32,6 +32,8 @@ class ImageGenerator:
         self.mirroring = mirroring
         self.shuffle = shuffle
 
+        self.current_index = 0
+
     def next(self):
         # This function creates a batch of images and corresponding labels and returns them.
         # In this context a "batch" of images just means a bunch, say 10 images that are forwarded at once.
@@ -58,22 +60,28 @@ class ImageGenerator:
             file_names.append(file_name)
 
 
-        current_index = 0
-        current_batch = total_paths[current_index:self.batch_size]  # paths for images in current batch
-        current_batch_label = file_names[current_index:self.batch_size] # file names for labels in current batch (file names)
+        for _ in range(self.batch_size):
+            # if dataset is not evenly dividable by batch_size
+            if self.current_index >= len(file_names):
+                self.index = 0
 
-        current_index = current_index + self.batch_size
+            current_batch = total_paths[self.current_index:self.batch_size]  # paths for images in current batch
+            current_batch_label = file_names[self.current_index:self.batch_size] # file names for labels in current batch (file names)
 
-        images_batch = [] # all images in current batch
-        labels_batch = [] # all labels in current batch
-        for file_path, batch_label_index in zip(current_batch, current_batch_label):
-            batch_file = np.load(file_path)
+            self.current_index = self.current_index + self.batch_size
 
-            images_batch.append(batch_file)
-            labels_batch.append(labels[batch_label_index])
+            images_batch = [] # all images in current batch
+            labels_batch = [] # all labels in current batch
+            for file_path, batch_label_index in zip(current_batch, current_batch_label):
+                batch_file = np.load(file_path)
 
-        return_batch = (images_batch, labels_batch)
-        return return_batch
+                # resize image after .npy file is loaded
+                batch_file_resized = resize(batch_file, self.image_size)
+
+                images_batch.append(batch_file_resized)
+                labels_batch.append(labels[batch_label_index])
+
+        return images_batch, labels_batch
 
 
     def augment(self,img):

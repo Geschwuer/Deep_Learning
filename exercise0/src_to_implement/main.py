@@ -17,12 +17,13 @@ def main():
     spectrum.show()
 
     image_generator = ImageGenerator(
-        file_path="c:\\FAU_Programming\\Deep_Learning\\exercise0\\src_to_implement\\data\\exercise_data",
-        label_path="C:\\FAU_Programming\\Deep_Learning\\exercise0\\src_to_implement\\data\\Labels.json",
+        file_path="c:\\FAU_Programming\\Deep_Learning\\exercise0\\src_to_implement\\exercise_data",
+        label_path="C:\\FAU_Programming\\Deep_Learning\\exercise0\\src_to_implement\\Labels.json",
         batch_size=10,
-        image_size=[10,10,10],
+        image_size=[100,100,3],
     )
 
+    
     image_generator.next()
 
 
