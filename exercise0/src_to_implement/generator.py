@@ -79,8 +79,7 @@ class ImageGenerator:
             img = np.load(img_path)
             # resize image to image_size
             img = cv2.resize(img, (self.image_size[1], self.image_size[0])) # (height, width) = (image_size[0], image_size[1])
-            
-            #TODO: maybe add augmentation here
+
             img = self.augment(img)
 
             images.append(img)
@@ -108,6 +107,8 @@ class ImageGenerator:
             if np.random.rand() > 0.5:
                 # flip image horizontally using https://www.geeksforgeeks.org/python-opencv-cv2-flip-method/
                 img = cv2.flip(img, 1)
+        
+        img = cv2.resize(img, (self.image_size[1], self.image_size[0]))
 
         return img
 
