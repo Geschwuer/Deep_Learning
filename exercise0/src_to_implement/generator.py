@@ -81,7 +81,7 @@ class ImageGenerator:
                 images_batch.append(batch_file_resized)
                 labels_batch.append(labels[batch_label_index])
 
-        return images_batch, labels_batch
+        return np.array(images_batch), np.array(labels_batch)
 
 
     def augment(self,img):
