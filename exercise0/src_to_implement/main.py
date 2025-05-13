@@ -17,8 +17,8 @@ def main():
     # spectrum.show()
 
     # Test ImageGenerator class
-    generator = ImageGenerator(file_path="./data/exercise_data", 
-                               label_path="./data/Labels.json",
+    generator = ImageGenerator(file_path="./exercise_data", 
+                               label_path="./Labels.json",
                                batch_size = 32, 
                                image_size=[100, 90, 3],
                                rotation=True,
