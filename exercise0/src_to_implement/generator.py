@@ -5,12 +5,13 @@ from skimage.transform import resize
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
+import random
 
 # In this exercise task you will implement an image generator. Generator objects in python are defined as having a next function.
 # This next function returns the next generated object. In our case it returns the input of a neural network each time it gets called.
 # This input consists of a batch of images and its corresponding labels.
 class ImageGenerator:
-    def __init__(self, file_path : str, label_path:str, batch_size:str, image_size:list, rotation:bool=False, mirroring:bool=False, shuffle:bool=False):
+    def __init__(self, file_path : str, label_path:str, batch_size:int, image_size:list, rotation:bool=False, mirroring:bool=False, shuffle:bool=False):
         # Define all members of your generator class object as global members here.
         # These need to include:
         # the batch size
@@ -32,7 +33,27 @@ class ImageGenerator:
         self.mirroring = mirroring
         self.shuffle = shuffle
 
+        with open(self.label_path) as labels_file:
+            self.labels = json.load(labels_file)
+
+        # Load file names and paths
+        file_names = [os.path.splitext(f)[0] for f in os.listdir(self.file_path)]
+        total_paths = [os.path.join(self.file_path, f"{name}.npy") for name in file_names]
+
+        # Shuffle at the start if needed
+        if self.shuffle:
+            combined = list(zip(total_paths, file_names))
+            random.shuffle(combined)
+            total_paths, file_names = zip(*combined)
+            total_paths, file_names = list(total_paths), list(file_names)
+
+
+        self.total_paths = total_paths
+        self.file_names = file_names
+        self.dataset_size = len(self.file_names)
         self.current_index = 0
+
+        self.epoch = 0
 
     def next(self):
         # This function creates a batch of images and corresponding labels and returns them.
@@ -45,41 +66,45 @@ class ImageGenerator:
         
 
 
-        with open(self.label_path) as labels_file:
-            labels = json.load(labels_file)
-        
-        # list of all files
-        file_paths = os.listdir(self.file_path)
+        if self.current_index >= self.dataset_size:
+            self.current_index = 0
+            self.epoch += 1
+            if self.shuffle:
+                combined = list(zip(self.total_paths, self.file_names))
+                random.shuffle(combined)
+                self.total_paths, self.file_names = zip(*combined)
+                self.total_paths = list(self.total_paths)
+                self.file_names = list(self.file_names)
 
-        total_paths = [] # abosolute paths of all .npy files
-        file_names = [] # list of all file names without file ending --> e.g. "3"
+        end_index = min(self.current_index + self.batch_size, self.dataset_size)
+        batch_paths = self.total_paths[self.current_index:end_index]
+        batch_names = self.file_names[self.current_index:end_index]
 
-        for file in file_paths:
-            total_paths.append(os.path.join(self.file_path, file))
-            file_name = os.path.splitext(file)[0]
-            file_names.append(file_name)
+        self.current_index = end_index
 
+        images_batch = []
+        labels_batch = []
 
-        for _ in range(self.batch_size):
-            # if dataset is not evenly dividable by batch_size
-            if self.current_index >= len(file_names):
-                self.index = 0
+        for path, name in zip(batch_paths, batch_names):
+            image = np.load(path)
+            image_resized = resize(image, self.image_size)
 
-            current_batch = total_paths[self.current_index:self.batch_size]  # paths for images in current batch
-            current_batch_label = file_names[self.current_index:self.batch_size] # file names for labels in current batch (file names)
-
-            self.current_index = self.current_index + self.batch_size
-
-            images_batch = [] # all images in current batch
-            labels_batch = [] # all labels in current batch
-            for file_path, batch_label_index in zip(current_batch, current_batch_label):
-                batch_file = np.load(file_path)
-
-                # resize image after .npy file is loaded
-                batch_file_resized = resize(batch_file, self.image_size)
-
-                images_batch.append(batch_file_resized)
-                labels_batch.append(labels[batch_label_index])
+            # mirror images randomly
+            if self.mirroring:
+                if random.random() > 0.5:
+                    image_resized = image_resized[::-1, ::-1, :]
+            # else:
+            #     image_resized_mirrored = image_resized[::-1, :, :]
+            if self.rotation:
+                angle = random.choice([90, 180, 270])
+                if angle == 90:
+                    self.image = np.rot90(image_resized, k = 1)
+                elif angle == 180:
+                    self.image = np.rot90(image_resized, k = 2)
+                elif angle == 270:
+                    self.image = np.rot90(image_resized, k = 3)
+            images_batch.append(image_resized)
+            labels_batch.append(self.labels[name])
 
         return np.array(images_batch), np.array(labels_batch)
 
@@ -93,15 +118,35 @@ class ImageGenerator:
 
     def current_epoch(self):
         # return the current epoch number
-        return 0
 
-    def class_name(self, x):
+        return self.epoch
+
+    def class_name(self, x:int):
         # This function returns the class name for a specific input
         #TODO: implement class name function
-        return
+        return self.class_dict[x]
     def show(self):
         # In order to verify that the generator creates batches as required, this functions calls next to get a
         # batch of images and labels and visualizes it.
         #TODO: implement show method
-        pass
+        images, labels = self.next()
+
+        cols = min(self.batch_size, 7) # max 7 images per row
+        rows = int(np.ceil(self.batch_size / cols))
+
+        fig, axes = plt.subplots(rows, cols, figsize=(2*cols, 2*rows))
+        axes = axes.flatten() # flatten the axes array to make it easier to iterate over
+
+        for i in range(self.batch_size):
+            ax = axes[i]
+            ax.imshow(images[i], cmap = 'viridis')
+            ax.set_title(self.class_name(labels[i]))
+            ax.axis('off')
+
+        # turn off remaining axes
+        for j in range(self.batch_size, len(axes)):
+            axes[j].axis('off')
+
+        plt.tight_layout()
+        plt.show()
 
