@@ -15,8 +15,7 @@ class NeuralNetwork:
 
 
     def forward(self):
-        input_tensor, self.label_tensor = next(self.data_layer)
-    
+        input_tensor, self.label_tensor = self.data_layer.next()
         # Pass input through all layers in the network
         for layer in self.layers:
             input_tensor = layer.forward(input_tensor)

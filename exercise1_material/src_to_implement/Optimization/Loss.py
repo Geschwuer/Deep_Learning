@@ -16,7 +16,7 @@ class CrossEntropyLoss:
         clipped_preds = np.clip(prediction_tensor, epsilon, 1)
 
         # dividing by the batch_size (prediction_tensor.shape[0]) gives the average loss
-        loss = -np.sum(label_tensor * np.log(clipped_preds)) / prediction_tensor.shape[0]
+        loss = -np.sum(label_tensor * np.log(clipped_preds))
         return loss # returns a number, not a matrix
 
 

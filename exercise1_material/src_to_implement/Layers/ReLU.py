@@ -9,8 +9,9 @@ class ReLU(BaseLayer):
     def forward(self, input_tensor : np.ndarray) -> np.ndarray:
         self.input_tensor = input_tensor # store input for backward pass
 
-        output_tensor = input_tensor[input_tensor < 0]  = 0
-        return output_tensor
+        input_tensor[input_tensor < 0]  = 0
+        # output_tensor = np.maximum(0, input_tensor)
+        return input_tensor
     
 
     def backward(self, error_tensor): 
