@@ -45,7 +45,7 @@ class NeuralNetwork:
         # do forward and backward iterations
         for _ in range(iterations):
             loss_val = self.forward()
-            self.loss.append(np.mean(loss_val)) # in case loss val is batch-wise
+            self.loss.append(loss_val)
             self.backward() # update weights
         # also no need to return here
 
