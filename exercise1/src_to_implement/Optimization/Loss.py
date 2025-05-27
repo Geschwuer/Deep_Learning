@@ -10,8 +10,10 @@ class CrossEntropyLoss():
         # this may cause numerical issues during backpropagation (Loss calculation)
         prediction_tensor_clipped = np.clip(prediction_tensor, eps, 1-eps)
         self.prediction_tensor = prediction_tensor_clipped
-        # calculate loss
-        loss = -np.sum(label_tensor * np.log(prediction_tensor_clipped), axis=1, keepdims=True)
+        # calculate loss for each batch
+        batch_loss = -np.sum(label_tensor * np.log(prediction_tensor_clipped), axis=1, keepdims=True)
+        # sum up batch_losses
+        loss = float(np.sum(batch_loss))
         return loss
 
     def backward(self, label_tensor):

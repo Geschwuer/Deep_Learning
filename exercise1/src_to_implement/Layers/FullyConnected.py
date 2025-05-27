@@ -5,7 +5,8 @@ class FullyConnected(BaseLayer):
     def __init__(self, input_size: int, output_size: int):
         super().__init__()
         self.trainable = True
-        self.weights = np.random.randn(input_size + 1, output_size) # +1 for bias
+        # initialize weight matrix with uniformly distributed weights [0, 1]
+        self.weights = np.random.rand(input_size + 1, output_size) # +1 for bias
         self._gradient_weights = None
         self._optimizer = None
         self.input_tensor = None
