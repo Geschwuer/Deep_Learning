@@ -12,7 +12,7 @@ class Conv(BaseLayer):
         - stride_shape: 
         """
         self.trainable = True
-        self.stride_shape = stride_shape if isinstance(stride_shape, tuple) else (stride_shape,) #always safe as tuple
+        self.stride_shape = stride_shape
         self.convolution_shape = convolution_shape
         self.num_kernels = num_kernels
 
@@ -43,18 +43,11 @@ class Conv(BaseLayer):
         self.input_tensor = None
 
 
-
-    
-
-    def same_padding(self, input_size, kernel_size, stride):
-        """
-        Computes the amount of padding needed for 'same' padding.
-        """
-        output_size = int(np.ceil(input_size / stride))
-        pad_total = max((output_size - 1) * stride + kernel_size - input_size, 0)
-        pad_before = pad_total // 2
-        pad_after = pad_total - pad_before
-        return pad_before, pad_after, output_size
+    def initialize(self, weights_initializer, bias_initializer):
+            fan_in = self.num_input_channels * np.prod(self.kernel_size)
+            fan_out = self.num_kernels * np.prod(self.kernel_size)
+            self.weights = weights_initializer.initialize(self.weights.shape, fan_in, fan_out)
+            self.bias = bias_initializer.initialize(self.bias.shape, fan_in, fan_out)
 
 
     def forward(self, input_tensor):
@@ -79,24 +72,14 @@ class Conv(BaseLayer):
             batch_size, num_channels, input_width = input_tensor.shape
             kernel_width = self.kernel_size[0]
             stride = self.stride_shape[0]
-            # calculate padding
-            pad_left, pad_right, output_width = self.same_padding(input_width, kernel_width, stride)
-            padded_input = np.pad(
-                input_tensor,
-                pad_width=((0, 0),  # batch-dimension --> no padding
-                           (0, 0),  # channels-dimension --> no padding
-                           (pad_left, pad_right)),
-                mode='constant',    # pad with constant values
-                constant_values=0   # use 0 as padding value
-            )
-            # prepare output
+            output_width = int(np.ceil(input_width / stride))
             output = np.zeros((batch_size, self.num_kernels, output_width))
             # apply kernels to input
             for b in range(batch_size):
                 for k in range(self.num_kernels):
                     for c in range(num_channels):
                         # instead of padding with np we can also use mode="same" here
-                        corr = correlate(padded_input[b, c], self.weights[k, c], mode="valid") 
+                        corr = correlate(input_tensor[b, c], self.weights[k, c], mode="same") 
                         output[b, k] += corr[::stride] # stride via slicing
                     output[b, k] += self.bias[k] # sum up over all channels e.g. 3 channels for RGB
 
@@ -113,74 +96,166 @@ class Conv(BaseLayer):
                 for k in range(self.num_kernels):
                     for c in range(num_channels):
                         # instead of padding with np we can also use mode="same" here
-                        corr = correlate2d(input_tensor[b, c], self.weights[k, c], mode="valid") 
+                        corr = correlate2d(input_tensor[b, c], self.weights[k, c], mode="same") 
                         output[b, k] += corr[::stride_x, ::stride_y] # stride via slicing
                     output[b, k] += self.bias[k] # sum up over all channels e.g. 3 channels for RGB
         return output
 
 
-    def backward(self, error_tensor):
-        # handle 1D case
-        if self.is_1d:
-            # dL/db
-            # sum over batch and width axis --> one error value for each kernel
-            self._gradient_bias = np.sum(error_tensor, axis=(0, 2)) # 1D: (b, k, w)
-            # dL/dw
-            self._gradient_weights = np.zeros_like(self.weights)
+    def _upsampling_1D(self, tensor, stride):
+        batch_size, num_kernels, tensor_width = tensor.shape
+        upsampled_width = (tensor_width - 1) * stride + 1
+        upsampled_tensor = np.zeros((batch_size, num_kernels, upsampled_width))
+        upsampled_tensor[:, :, ::stride] = tensor
+        return upsampled_tensor
+    
 
-            batch_size = error_tensor.shape[0]
+    def _upsampling_2D(self, tensor, stride):
+        batch_size, num_kernels, tensor_width, tensor_height = tensor.shape
+        stride_x, stride_y = stride
+        upsampled_width = (tensor_width - 1) * stride_x + 1
+        upsampled_height = (tensor_height - 1) * stride_y + 1
+        upsampled_tensor = np.zeros((batch_size, num_kernels, upsampled_width, upsampled_height))
+        upsampled_tensor[:, :, ::stride_x, ::stride_y] = tensor
+
+        #     # 🔍 Spezialfall: stride_x ≠ stride_y kann zu Shape-Mismatch führen
+        # if stride_x != stride_y:
+        #     # Prüfen, ob in der Breite (Achse 3) 1 Spalte fehlt, um korrekte correlate2d-Größe zu erhalten
+        #     expected_width = upsampled_tensor.shape[2]
+        #     expected_height = upsampled_tensor.shape[3]
+
+        #     # Diese Information ist nur beim Rückwärtslauf vorhanden:
+        #     # Man kann alternativ direkt im backward() prüfen, ob correlate2d falsch rauskommt.
+        #     # Aber einfacher Workaround:
+        #     if expected_height % stride_y != 1:
+        #         # Pad rechts 1 Spalte mit 0
+        #         upsampled_tensor = np.pad(
+        #             upsampled_tensor,
+        #             pad_width=((0, 0), (0, 0), (0, 0), (0, 1)),  # nur rechts in Achse 3
+        #             mode='constant'
+        #         )    
+        return upsampled_tensor
+
+
+    def _reconstrct_padding_1D(self, tensor, input_width, kernel_width):
+        tensor_width = tensor.shape[2]
+        pad_total = (input_width + kernel_width - 1) - tensor_width
+        pad_left = pad_total // 2
+        pad_right = pad_total - pad_left
+        padded_tensor = np.pad(
+            tensor,
+            pad_width=((0, 0), (0, 0), (pad_left, pad_right)),
+            mode='constant'
+        )
+        return padded_tensor
+    
+
+    def _reconstruct_padding_2D(self, tensor, input_width, input_height, kernel_width, kernel_height):
+        tensor_width = tensor.shape[2]
+        tensor_height = tensor.shape[3]
+
+        pad_total_x = (input_width + kernel_width - 1) - tensor_width
+        pad_left = pad_total_x // 2
+        pad_right = pad_total_x - pad_left
+
+        pad_total_y = (input_height + kernel_height - 1) - tensor_height
+        pad_top = pad_total_y // 2
+        pad_bottom = pad_total_y - pad_top
+
+        padded_tensor = np.pad(
+            tensor,
+            pad_width=(
+            (0, 0),
+            (0, 0),
+            (pad_left, pad_right),
+            (pad_top, pad_bottom)),
+            mode = 'constant'
+        )
+        return padded_tensor
+    
+    # def _reconstruct_padding_2D_input(self, tensor, upsampled_error, kernel_width, kernel_height):
+    #     input_width = tensor.shape[2]
+    #     input_height = tensor.shape[3]
+
+    #     target_width = upsampled_error.shape[2] + kernel_width - 1
+    #     target_height = upsampled_error.shape[3] + kernel_height - 1
+
+    #     pad_total_x = target_width - input_width
+    #     pad_left = pad_total_x // 2
+    #     pad_right = pad_total_x - pad_left
+
+    #     pad_total_y = target_height - input_height
+    #     pad_top = pad_total_y // 2
+    #     pad_bottom = pad_total_y - pad_top
+
+    #     padded_tensor = np.pad(
+    #         tensor,
+    #         pad_width=((0, 0), (0, 0), (pad_left, pad_right), (pad_top, pad_bottom)),
+    #         mode='constant'
+    #     )
+    #     return padded_tensor
+
+
+
+
+
+    def backward(self, error_tensor):
+        if self.is_1d:
+            batch_size, num_kernels, error_width = error_tensor.shape
             stride = self.stride_shape[0]
             kernel_width = self.kernel_size[0]
-            num_input_channels = self.input_tensor.shape[1] # get number of input channels
+            num_input_channels = self.input_tensor.shape[1]
             input_width = self.input_tensor.shape[2]
 
-            # - Manual padding needed in backward pass
-            # - Ensures correct alignment of input and error tensor
-            # - Mimics "same" padding from forward pass
-            # - Padding with half the kernel width on both sides
-            # - Needed to get properly shaped weight gradients using correlation
-            pad = self.kernel_size[0] - 1
-            padded_input = np.pad(
-                self.input_tensor,
-                pad_width=((0, 0),  # batch-dimension --> no padding
-                           (0, 0),  # channels-dimension --> no padding
-                           (pad, pad)),
-                mode='constant',    # pad with constant values
-                constant_values=0   # use 0 as padding value
-            )
+            # Bias gradient
+            self._gradient_bias = np.sum(error_tensor, axis=(0, 2))  # (num_kernels,)
+            
+            # === 1. Upsampling of error_tensor ===
+            upsampled_error = self._upsampling_1D(error_tensor, stride)
 
-            for k in range(self.num_kernels):
-                for c in range(num_input_channels):
-                    grad = np.zeros(kernel_width)
-                    for b in range(batch_size):
-                        grad += correlate(padded_input[b, c], error_tensor[b, k], mode='valid')
-                    self._gradient_weights[k, c] = grad
+            # === 2. Reconstruct padding ===D
+            padded_input = self._reconstrct_padding_1D(self.input_tensor, input_width, kernel_width)
+            padded_upsampled_error = self._reconstrct_padding_1D(upsampled_error, input_width, kernel_width)
 
-            # calculate weight and bias update
-            if self._optimizer_bias is not None:
-                self.bias = self._optimizer_bias.calculate_update(self.bias, self._gradient_bias)
+            # === 3. Grad w.r.t. Weights: dL/dw ===
+            self._gradient_weights = np.zeros_like(self.weights)
+            
+            for b in range(batch_size):
+                for k in range(num_kernels):
+                    for c in range(num_input_channels):
+                        self._gradient_weights[k, c] += correlate(
+                            padded_input[b, c],
+                            upsampled_error[b, k],
+                            mode='valid'
+                        )
+
+            # === 4. Optimizer step ===
             if self._optimizer_weights is not None:
                 self.weights = self._optimizer_weights.calculate_update(self.weights, self._gradient_weights)
+            if self._optimizer_bias is not None:
+                self.bias = self._optimizer_bias.calculate_update(self.bias, self._gradient_bias)
 
-            # calculate error_prev dL/dx
-            padded_error = np.pad(
-                error_tensor,
-                pad_width=((0, 0),  # batch-dimension --> no padding
-                           (0, 0),  # channels-dimension --> no padding
-                           (pad, pad)),
-                mode='constant',    # pad with constant values
-                constant_values=0   # use 0 as padding value
-            )
-            
+            # === 5. Grad w.r.t. Input: dL/dx ===
             error_prev = np.zeros_like(self.input_tensor)
 
-            # convolve with kernel or correlate with flipped kernel
             for b in range(batch_size):
                 for c in range(num_input_channels):
-                    for k in range(self.num_kernels):
-                        rotated_kernel = np.flip(self.weights[k, c]) # flip kernel --> conv in backward
-                        corr = correlate(padded_error[b, k], rotated_kernel, mode="valid")
-                        error_prev[b, c] += corr[::stride] # stride!!!
+                    for k in range(num_kernels):
+                        # print("padded_input shape:", padded_input[b, c].shape)
+                        # print("upsampled_error shape:", upsampled_error[b, k].shape)
+                        # print("correlation result shape:", correlate(padded_input[b, c], upsampled_error[b, k], mode="valid").shape)
+                        # print("expected kernel shape:", self._gradient_weights[k, c].shape)
+                        # print("weights[k, c] shape:", self.weights[k, c].shape)
+                        # print("padded_error shape:", padded_error[b, k].shape)
+                        # print("resulting corr shape:", correlate(padded_error[b, k], self.weights[k, c], mode="valid").shape)
+                        # print("expected input gradient shape:", error_prev[b, c].shape)
+
+                        # correlation --> no kernel flipping
+                        error_prev[b, c] += correlate(
+                            padded_upsampled_error[b, k],
+                            self.weights[k, c],
+                            mode='valid'
+                        )
 
         # handle 2D case
         else:
@@ -192,56 +267,80 @@ class Conv(BaseLayer):
 
             batch_size, num_input_channels, input_width, input_height = self.input_tensor.shape
             kernel_width, kernel_height = self.kernel_size
-            stride_x, stride_y = self.stride_shape
 
-            # padding of input_tensor
-            pad_x = self.kernel_size[0] - 1
-            pad_y = self.kernel_size[1] - 1
+            # === 1. Upsampling of error_tensor ===
+            upsampled_error = self._upsampling_2D(error_tensor, self.stride_shape)
+            
+            # === 2. Reconstruct padding ===D
+            padded_input = self._reconstruct_padding_2D(
+                self.input_tensor, 
+                input_width,
+                input_height,
+                kernel_width,
+                kernel_height
+                )
+            
 
-            padded_input = np.pad(
-                self.input_tensor,
-                pad_width=((0, 0),  # batch-dimension --> no padding
-                           (0, 0),  # channels-dimension --> no padding
-                           (pad_x, pad_x),
-                           (pad_y, pad_y)),
-                mode='constant',    # pad with constant values
-                constant_values=0   # use 0 as padding value
-            )
+            expected_upsampled_width = padded_input.shape[2] - kernel_width + 1
+            expected_upsampled_height = padded_input.shape[3] - kernel_height + 1
+
+            actual_upsampled_width = upsampled_error.shape[2]
+            actual_upsampled_height = upsampled_error.shape[3]
+
+            pad_w = expected_upsampled_width - actual_upsampled_width
+            pad_h = expected_upsampled_height - actual_upsampled_height
+
+            if pad_w > 0 or pad_h > 0:
+                upsampled_error = np.pad(
+                    upsampled_error,
+                    pad_width=((0, 0), (0, 0), (0, pad_w), (0, pad_h)),  # rechts/unten paddieren
+                    mode='constant'
+                )
+
+
+
+
+
+            padded_upsampled_error = self._reconstruct_padding_2D(upsampled_error,
+                                                                 input_width,
+                                                                 input_height,
+                                                                 kernel_width,
+                                                                 kernel_height)
 
             # compute gradient w.r.t. weights
             for k in range(self.num_kernels):
                 for c in range(num_input_channels):
-                    grad = np.zeros((kernel_width, kernel_height))
                     for b in range(batch_size):
-                        grad += correlate2d(padded_input[b, c], error_tensor[b, k], mode='valid')
-                    self._gradient_weights[k, c] = grad
 
+                        # print("upsampled_error shape:", upsampled_error[b, k].shape)
+                        # print("padded input shape:", padded_input[b, c].shape)
+                        # print("gradient weight shape:", self._gradient_weights[k, c].shape)
+                        # print("corr2d shape:", correlate2d(padded_input[b, c], upsampled_error[b, k], mode='valid').shape)
+                        print("stride_shape: ", self.stride_shape)
+                        # print("-----------------------------------------------")
+
+
+
+                        self._gradient_weights[k, c] += correlate2d(padded_input[b, c], 
+                                                                    upsampled_error[b, k], 
+                                                                    mode='valid')
+                    
             # calculate weight and bias update
             if self._optimizer_bias is not None:
                 self.bias = self._optimizer_bias.calculate_update(self.bias, self._gradient_bias)
             if self._optimizer_weights is not None:
                 self.weights = self._optimizer_weights.calculate_update(self.weights, self._gradient_weights)
 
-            # calculate dL/dx
-            padded_error = np.pad(
-                error_tensor,
-                pad_width=((0, 0),  # batch-dimension --> no padding
-                           (0, 0),  # channels-dimension --> no padding
-                           (pad_x, pad_x),
-                           (pad_y, pad_y)),
-                mode='constant',    # pad with constant values
-                constant_values=0   # use 0 as padding value
-            )
-            
+            # calculate dL/dx           
             error_prev = np.zeros_like(self.input_tensor)
 
             # convolve with kernel or correlate with flipped kernel
             for b in range(batch_size):
                 for c in range(num_input_channels):
                     for k in range(self.num_kernels):
-                        rotated_kernel = np.flip(self.weights[k, c], axis=(0,1)) # flip kernel both axes --> conv in backward
-                        corr = correlate2d(padded_error[b, k], rotated_kernel, mode="valid")
-                        error_prev[b, c] += corr[::stride_x, ::stride_y] # stride!!!
+                        error_prev[b, c] = correlate2d(padded_upsampled_error[b, k], 
+                                           self.weights[k, c], 
+                                           mode="valid")
 
         return error_prev
 
