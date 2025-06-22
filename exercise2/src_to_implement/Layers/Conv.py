@@ -34,8 +34,7 @@ class Conv(BaseLayer):
         self.bias = np.random.uniform(0, 1, size=num_kernels) # output(h) = (input * filter) + bias(h)
 
         # prepare optimizers and gradients
-        self._optimizer_weights = None
-        self._optimizer_bias = None
+        self._optimizer = None
         self._gradient_weights = None
         self._gradient_bias = None
 
@@ -230,30 +229,21 @@ class Conv(BaseLayer):
                         )
 
             # === 4. Optimizer step ===
-            if self._optimizer_weights is not None:
-                self.weights = self._optimizer_weights.calculate_update(self.weights, self._gradient_weights)
-            if self._optimizer_bias is not None:
-                self.bias = self._optimizer_bias.calculate_update(self.bias, self._gradient_bias)
+            if self._optimizer is not None:
+                self.weights = self._optimizer.calculate_update(self.weights, self._gradient_weights)
+                self.bias = self._optimizer.calculate_update(self.bias, self._gradient_bias)
+                
 
             # === 5. Grad w.r.t. Input: dL/dx ===
             error_prev = np.zeros_like(self.input_tensor)
+            weights_flipped = np.flip(self.weights, axis=2)
 
             for b in range(batch_size):
                 for c in range(num_input_channels):
                     for k in range(num_kernels):
-                        # print("padded_input shape:", padded_input[b, c].shape)
-                        # print("upsampled_error shape:", upsampled_error[b, k].shape)
-                        # print("correlation result shape:", correlate(padded_input[b, c], upsampled_error[b, k], mode="valid").shape)
-                        # print("expected kernel shape:", self._gradient_weights[k, c].shape)
-                        # print("weights[k, c] shape:", self.weights[k, c].shape)
-                        # print("padded_error shape:", padded_error[b, k].shape)
-                        # print("resulting corr shape:", correlate(padded_error[b, k], self.weights[k, c], mode="valid").shape)
-                        # print("expected input gradient shape:", error_prev[b, c].shape)
-
-                        # correlation --> no kernel flipping
                         error_prev[b, c] += correlate(
                             padded_upsampled_error[b, k],
-                            self.weights[k, c],
+                            weights_flipped[k, c],
                             mode='valid'
                         )
 
@@ -297,49 +287,37 @@ class Conv(BaseLayer):
                     mode='constant'
                 )
 
-
-
-
-
             padded_upsampled_error = self._reconstruct_padding_2D(upsampled_error,
                                                                  input_width,
                                                                  input_height,
                                                                  kernel_width,
                                                                  kernel_height)
 
+            #upsampled_error_flipped = np.flip(upsampled_error, axis=(2,3))
+
             # compute gradient w.r.t. weights
             for k in range(self.num_kernels):
                 for c in range(num_input_channels):
                     for b in range(batch_size):
-
-                        # print("upsampled_error shape:", upsampled_error[b, k].shape)
-                        # print("padded input shape:", padded_input[b, c].shape)
-                        # print("gradient weight shape:", self._gradient_weights[k, c].shape)
-                        # print("corr2d shape:", correlate2d(padded_input[b, c], upsampled_error[b, k], mode='valid').shape)
-                        print("stride_shape: ", self.stride_shape)
-                        # print("-----------------------------------------------")
-
-
-
                         self._gradient_weights[k, c] += correlate2d(padded_input[b, c], 
-                                                                    upsampled_error[b, k], 
+                                                                    upsampled_error[b, k],
                                                                     mode='valid')
                     
             # calculate weight and bias update
-            if self._optimizer_bias is not None:
-                self.bias = self._optimizer_bias.calculate_update(self.bias, self._gradient_bias)
-            if self._optimizer_weights is not None:
-                self.weights = self._optimizer_weights.calculate_update(self.weights, self._gradient_weights)
+            if self._optimizer is not None:
+                self.weights = self._optimizer.calculate_update(self.weights, self._gradient_weights)
+                self.bias = self._optimizer.calculate_update(self.bias, self._gradient_bias)
 
             # calculate dL/dx           
             error_prev = np.zeros_like(self.input_tensor)
+            weights_flipped = np.flip(self.weights, axis=(2,3))
 
             # convolve with kernel or correlate with flipped kernel
             for b in range(batch_size):
                 for c in range(num_input_channels):
                     for k in range(self.num_kernels):
-                        error_prev[b, c] = correlate2d(padded_upsampled_error[b, k], 
-                                           self.weights[k, c], 
+                        error_prev[b, c] += correlate2d(padded_upsampled_error[b, k], 
+                                           weights_flipped[k, c], 
                                            mode="valid")
 
         return error_prev
@@ -356,10 +334,9 @@ class Conv(BaseLayer):
     
 
     @property
-    def optimizer_weights(self):
-        return self._optimizer_weights
+    def optimizer(self):
+        return self._optimizer
     
-
-    @property
-    def optimizer_bias(self):
-        return self._optimizer_bias
+    @optimizer.setter
+    def optimizer(self, optimizer):
+        self._optimizer = optimizer
