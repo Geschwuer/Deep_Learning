@@ -20,7 +20,7 @@ class FullyConnected(BaseLayer):
         weights = weights_initializer.initialize((fan_in, fan_out), fan_in, fan_out)
         bias = bias_initializer.initialize((1, fan_out), fan_in, fan_out)
 
-        self.weights = np.vstack(weights, bias)
+        self.weights = np.vstack((weights, bias))
 
 
     def forward(self, input_tensor: np.ndarray) -> np.ndarray:

@@ -1,6 +1,7 @@
 from Layers.Base import BaseLayer
 import numpy as np
 from scipy.signal import correlate, correlate2d
+from copy import deepcopy
 
 
 class Conv(BaseLayer):
@@ -230,8 +231,8 @@ class Conv(BaseLayer):
 
             # === 4. Optimizer step ===
             if self._optimizer is not None:
-                self.weights = self._optimizer.calculate_update(self.weights, self._gradient_weights)
-                self.bias = self._optimizer.calculate_update(self.bias, self._gradient_bias)
+                self.weights = self._optimizer_weights.calculate_update(self.weights, self._gradient_weights)
+                self.bias = self._optimizer_bias.calculate_update(self.bias, self._gradient_bias)
                 
 
             # === 5. Grad w.r.t. Input: dL/dx ===
@@ -251,7 +252,7 @@ class Conv(BaseLayer):
         else:
             # dL/db
             # sum over batch, width and height axis --> one error value for each kernel
-            self._gradient_bias = np.sum(error_tensor, axis=(0, 2, 3)) # 1D: (b, k, w, h)
+            self._gradient_bias = np.sum(error_tensor, axis=(0, 2, 3)) # 2D: (b, k, w, h)
             # dL/dw
             self._gradient_weights = np.zeros_like(self.weights)
 
@@ -305,8 +306,8 @@ class Conv(BaseLayer):
                     
             # calculate weight and bias update
             if self._optimizer is not None:
-                self.weights = self._optimizer.calculate_update(self.weights, self._gradient_weights)
-                self.bias = self._optimizer.calculate_update(self.bias, self._gradient_bias)
+                self.weights = self._optimizer_weights.calculate_update(self.weights, self._gradient_weights)
+                self.bias = self._optimizer_bias.calculate_update(self.bias, self._gradient_bias)
 
             # calculate dL/dx           
             error_prev = np.zeros_like(self.input_tensor)
@@ -340,3 +341,5 @@ class Conv(BaseLayer):
     @optimizer.setter
     def optimizer(self, optimizer):
         self._optimizer = optimizer
+        self._optimizer_weights = deepcopy(optimizer)
+        self._optimizer_bias = deepcopy(optimizer)

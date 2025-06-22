@@ -17,9 +17,9 @@ class SgdWithMomentum:
         self.velocity = None # init during first optimization step
 
     def calculate_update(self, weight_tensor, gradient_tensor):
-        if self.velocity == None:
-            self.velocity = 0 # first optimization step
-        
+        if self.velocity is None:
+            self.velocity = np.zeros_like(gradient_tensor) # first optimization step
+
         # calculate new velocity vector
         self.velocity = (
             self.momentum_rate * self.velocity  # μ * v_{t-1}
