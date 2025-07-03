@@ -65,3 +65,7 @@ On the UCI ML hand-written digits dataset, we achieve an accuracy of: 96.6611018
 On the Iris dataset, we achieve an accuracy of: 98.0%
 On the Iris dataset, we achieve an accuracy of: 100.0%
 On the Iris dataset, we achieve an accuracy of: 98.0%
+On the UCI ML hand-written digits dataset, we achieve an accuracy of: 94.99165275459099%
+On the Iris dataset, we achieve an accuracy of: 94.0%
+On the Iris dataset, we achieve an accuracy of: 94.0%
+On the Iris dataset, we achieve an accuracy of: 98.0%
