@@ -117,23 +117,7 @@ class Conv(BaseLayer):
         upsampled_height = (tensor_height - 1) * stride_y + 1
         upsampled_tensor = np.zeros((batch_size, num_kernels, upsampled_width, upsampled_height))
         upsampled_tensor[:, :, ::stride_x, ::stride_y] = tensor
-
-        #     # 🔍 Spezialfall: stride_x ≠ stride_y kann zu Shape-Mismatch führen
-        # if stride_x != stride_y:
-        #     # Prüfen, ob in der Breite (Achse 3) 1 Spalte fehlt, um korrekte correlate2d-Größe zu erhalten
-        #     expected_width = upsampled_tensor.shape[2]
-        #     expected_height = upsampled_tensor.shape[3]
-
-        #     # Diese Information ist nur beim Rückwärtslauf vorhanden:
-        #     # Man kann alternativ direkt im backward() prüfen, ob correlate2d falsch rauskommt.
-        #     # Aber einfacher Workaround:
-        #     if expected_height % stride_y != 1:
-        #         # Pad rechts 1 Spalte mit 0
-        #         upsampled_tensor = np.pad(
-        #             upsampled_tensor,
-        #             pad_width=((0, 0), (0, 0), (0, 0), (0, 1)),  # nur rechts in Achse 3
-        #             mode='constant'
-        #         )    
+  
         return upsampled_tensor
 
 
