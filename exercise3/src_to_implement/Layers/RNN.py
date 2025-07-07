@@ -4,7 +4,7 @@ from Layers.TanH import TanH
 from Layers.Sigmoid import Sigmoid
 from Layers.Flatten import Flatten
 import numpy as np
-import icecream as ic
+# import icecream as ic
 from copy import deepcopy
 
 class RNN(BaseLayer):

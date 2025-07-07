@@ -33,6 +33,8 @@ venv/
 *.zip
 *.npy
 *.json
+*.png
+*.ckp
 
 # Anaconda Umgebungsdateien (wenn auto-generiert)
 *.yaml
