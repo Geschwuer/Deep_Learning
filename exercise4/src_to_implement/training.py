@@ -119,3 +119,4 @@ def run_training(
     plt.xlabel("crack | inactive")
     plt.ylabel("number of samples")
     plt.savefig(run_dir / 'training_data_distribution.png')
+    plt.close()

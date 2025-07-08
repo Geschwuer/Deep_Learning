@@ -217,6 +217,7 @@ class Trainer:
                 ConfusionMatrixDisplay(confusion_matrix, display_labels=["0_0", "1_0", "0_1", "1_1"]).plot(cmap="Blues", values_format="d")
                 plt.title("Confusion Matrix")
                 plt.savefig(self._save_dir / 'confusion_matrix.png')
+                plt.close()
 
 
         self._logger("Training finished.\n")
