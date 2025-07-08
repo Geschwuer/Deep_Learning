@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
+from data import DataAugmenter
 
 from data import ChallengeDataset
 from model import Model
@@ -14,8 +15,29 @@ from trainer import Trainer
 # load the data from the csv file and perform a train-test-split
 df = pd.read_csv("data.csv", sep=";")
 train, val = train_test_split(df, test_size=0.2, random_state=42)
+
+################
+augmenter = DataAugmenter(df)
+df_augmented_combined = augmenter.augment_minority_classes()
+df_augmented_combined.to_csv("augmented_data.csv", index = False)
+
+# Klassenverteilung berechnen
+crack_count = df_augmented_combined["crack"].sum()
+inactive_count = df_augmented_combined["inactive"].sum()
+none_count = len(df_augmented_combined) - ((df_augmented_combined["crack"] == 1) | (df_augmented_combined["inactive"] == 1)).sum()
+# Optional: als Balkendiagramm
+plt.figure(figsize=(6,4))
+plt.bar(["Crack", "Inactive", "None"], [crack_count, inactive_count, none_count], color=["red", "blue", "gray"])
+plt.title("class distribution after augmentation")
+plt.ylabel("number of samples")
+plt.grid(axis="y", linestyle="--", alpha=0.7)
+plt.tight_layout()
+plt.show()
+################
+
+
 # set up data loading for the training and validation set each using t.utils.data.DataLoader and ChallengeDataset objects
-train_ds = ChallengeDataset(data=train, mode="train")
+train_ds = ChallengeDataset(data=df_augmented_combined, mode="train")
 val_ds = ChallengeDataset(data=val, mode="val")
 
 train_loader = DataLoader(train_ds, batch_size=32, shuffle=True)
