@@ -171,9 +171,7 @@ class Trainer:
         assert self._early_stopping_patience > 0 or epochs > 0, "Specify epochs or early stopping patience!"
         # create a list for the train and validation losses, and create a counter for the epoch 
         train_losses, val_losses, f1_scores = [], [], []
-        # patience_count_crack = 0
-        # patience_count_inactive = 0
-        #best_f1 = np.array([0.0, 0.0])
+
         patience_count = 0
         best_f1 = 0
         epoch = 0
@@ -206,12 +204,14 @@ class Trainer:
 
             if patience_count >= self._early_stopping_patience:
                 print(f"Early stopping triggered after {epoch} epochs. No improvement for {self._early_stopping_patience} epochs.")
+                self._logger(f"Early stopping triggered after {epoch} epochs. No improvement for {self._early_stopping_patience} epochs.")
                 break
            
             if checkpoint_needed:
                 # save model
                 self.save_checkpoint(epoch)
                 self.save_best_model(self._save_dir)
+                self._logger(f"saved checkpoint model at epoch: {epoch}")
 
                 # save confusion matrix for best model
                 ConfusionMatrixDisplay(confusion_matrix, display_labels=["0_0", "1_0", "0_1", "1_1"]).plot(cmap="Blues", values_format="d")
