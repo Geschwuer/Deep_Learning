@@ -34,9 +34,8 @@ sns.countplot(x="class_combo", data=df_augmented_combined)
 plt.title("class distribution after augmentation")
 plt.xlabel("crack | inactive")
 plt.ylabel("number of samples")
-plt.show()
 plt.savefig('DataAugmentation.png')
-
+plt.show()
 ################
 
 
@@ -44,8 +43,8 @@ plt.savefig('DataAugmentation.png')
 train_ds = ChallengeDataset(data=df_augmented_combined, mode="train")
 val_ds = ChallengeDataset(data=val, mode="val")
 
-train_loader = DataLoader(train_ds, batch_size=32, shuffle=True)
-val_loader = DataLoader(val_ds, batch_size=32, shuffle=False)
+train_loader = DataLoader(train_ds, batch_size=64, shuffle=True)
+val_loader = DataLoader(val_ds, batch_size=64, shuffle=False)
 
 # create an instance of our ResNet model
 model = Model(num_classes=2)
@@ -72,7 +71,7 @@ trainer = Trainer(
 )
 
 # go, go, go... call fit on trainer
-res = trainer.fit(epochs=1)
+res = trainer.fit(epochs=10)
 
 # plot the results
 plt.plot(np.arange(len(res[0])), res[0], label='train loss')

@@ -1,8 +1,9 @@
 import torch as t
 import numpy as np
 import os
-from sklearn.metrics import f1_score
+from sklearn.metrics import f1_score, confusion_matrix, ConfusionMatrixDisplay
 from tqdm.autonotebook import tqdm
+import matplotlib.pyplot as plt
 
 
 class Trainer:
@@ -139,6 +140,16 @@ class Trainer:
         all_labels = np.concatenate(all_labels)
 
         f1_per_class = f1_score(all_labels, all_preds, average=None, zero_division=0)
+
+        ###### calculate confusion matrix ##############
+        y_true_comb = [f"{c}_{i}" for c, i in all_labels]
+        y_pred_comb = [f"{c}_{i}" for c, i in all_preds]
+
+        cm = confusion_matrix(y_true_comb, y_pred_comb, labels=["0_0", "1_0", "0_1", "1_1"])
+        ConfusionMatrixDisplay(cm, display_labels=["0_0", "1_0", "0_1", "1_1"]).plot(cmap="Blues", values_format="d")
+        plt.title("Confusion Matrix")
+        plt.show()
+        ##############################################
 
         # return the loss and print the calculated metrics
         print(f"Validation Loss: {val_loss} | F1 Score - Crack: {f1_per_class[0]} | F1 Score - Inactive: {f1_per_class[1]}")
