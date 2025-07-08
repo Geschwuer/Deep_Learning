@@ -4,6 +4,7 @@ import os
 from sklearn.metrics import f1_score, confusion_matrix, ConfusionMatrixDisplay
 from tqdm.autonotebook import tqdm
 import matplotlib.pyplot as plt
+import datetime
 
 
 class Trainer:
@@ -26,10 +27,19 @@ class Trainer:
         self._save_dir = save_dir
 
         self._early_stopping_patience = early_stopping_patience
+        self._logger_path = save_dir / "training.log"
+
+        with open(self._logger_path, "w") as f:
+            f.write(f"# Training started: {datetime.datetime.now()}\n")
 
         if cuda:
             self._model = model.cuda()
             self._crit = crit.cuda()
+
+    def _logger(self, message: str):
+        with open(self._logger_path, "a") as f:
+            f.write(message + "\n")
+
             
     def save_checkpoint(self, epoch):
         os.makedirs("checkpoints", exist_ok=True)
@@ -159,6 +169,8 @@ class Trainer:
 
         # return the loss and print the calculated metrics
         print(f"Validation Loss: {val_loss} | F1 Score - Crack: {f1_per_class[0]} | F1 Score - Inactive: {f1_per_class[1]}")
+        
+
         return val_loss, f1_per_class
         
     
@@ -177,8 +189,11 @@ class Trainer:
                 break # training finished
             epoch += 1
             print(f"\nEpoch {epoch}")
+            
             train_loss = self.train_epoch()
             val_loss, f1_per_class = self.val_test()
+
+            self._logger(f"Epoch: {epoch} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | F1 Score - macro: {np.mean(f1_per_class)} | F1 Score - Crack: {f1_per_class[0]} | F1 Score - Inactive: {f1_per_class[1]}")
 
             train_losses.append(train_loss)
             val_losses.append(val_loss)
@@ -220,5 +235,7 @@ class Trainer:
             if checkpoint_needed:
                 self.save_checkpoint(epoch)
                 self.save_best_model(self._save_dir)
+
+        self._logger("Training finished.\n")
 
         return train_losses, val_losses
