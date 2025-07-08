@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from data import DataAugmenter
+import seaborn as sns
 
 from data import ChallengeDataset
 from model import Model
@@ -25,14 +26,17 @@ df_augmented_combined.to_csv("augmented_data.csv", index = False)
 crack_count = df_augmented_combined["crack"].sum()
 inactive_count = df_augmented_combined["inactive"].sum()
 none_count = len(df_augmented_combined) - ((df_augmented_combined["crack"] == 1) | (df_augmented_combined["inactive"] == 1)).sum()
-# Optional: als Balkendiagramm
-plt.figure(figsize=(6,4))
-plt.bar(["Crack", "Inactive", "None"], [crack_count, inactive_count, none_count], color=["red", "blue", "gray"])
+
+
+
+df_augmented_combined["class_combo"] = df_augmented_combined.apply(lambda row: f"{row['crack']}_{row['inactive']}", axis=1)
+sns.countplot(x="class_combo", data=df_augmented_combined)
 plt.title("class distribution after augmentation")
+plt.xlabel("crack | inactive")
 plt.ylabel("number of samples")
-plt.grid(axis="y", linestyle="--", alpha=0.7)
-plt.tight_layout()
 plt.show()
+plt.savefig('DataAugmentation.png')
+
 ################
 
 
