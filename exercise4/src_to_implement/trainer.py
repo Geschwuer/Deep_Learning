@@ -147,28 +147,25 @@ class Trainer:
 
         f1_per_class = f1_score(all_labels, all_preds, average=None, zero_division=0)
 
-        ###### calculate confusion matrix ##############
         y_true_comb = [f"{c}_{i}" for c, i in all_labels]
         y_pred_comb = [f"{c}_{i}" for c, i in all_preds]
-
         cm = confusion_matrix(y_true_comb, y_pred_comb, labels=["0_0", "1_0", "0_1", "1_1"])
-        ConfusionMatrixDisplay(cm, display_labels=["0_0", "1_0", "0_1", "1_1"]).plot(cmap="Blues", values_format="d")
-        plt.title("Confusion Matrix")
-        plt.show()
-        ##############################################
+
 
         # return the loss and print the calculated metrics
         print(f"Validation Loss: {val_loss} | F1 Score - Crack: {f1_per_class[0]} | F1 Score - Inactive: {f1_per_class[1]}")
-        return val_loss, f1_per_class
+        return val_loss, f1_per_class, cm
         
     
     def fit(self, epochs=-1):
         assert self._early_stopping_patience > 0 or epochs > 0, "Specify epochs or early stopping patience!"
         # create a list for the train and validation losses, and create a counter for the epoch 
         train_losses, val_losses, f1_scores = [], [], []
-        patience_count_crack = 0
-        patience_count_inactive = 0
-        best_f1 = np.array([0.0, 0.0])
+        # patience_count_crack = 0
+        # patience_count_inactive = 0
+        #best_f1 = np.array([0.0, 0.0])
+        patience_count = 0
+        best_f1 = 0
         epoch = 0
         
         while True:
@@ -178,47 +175,35 @@ class Trainer:
             epoch += 1
             print(f"\nEpoch {epoch}")
             train_loss = self.train_epoch()
-            val_loss, f1_per_class = self.val_test()
+            val_loss, f1_per_class, confusion_matrix = self.val_test()
 
             train_losses.append(train_loss)
             val_losses.append(val_loss)
             f1_scores.append(f1_per_class)
             
-            # if validation loss decreased save model checkpoint
-            # if val_loss < best_val:
-            #     best_val = val_loss
-            #     patience_count = 0
-            #     self.save_checkpoint(epoch)
-            # else:
-            #     patience_count += 1
-
+            # early stopping
             checkpoint_needed = False
-            # f1 based early stopping Crack
-            if f1_per_class[0] > best_f1[0]:
-                best_f1[0] = f1_per_class[0]
-                patience_count_crack = 0
-                checkpoint_needed = True
-            else:
-                patience_count_crack += 1
-            # early stopping
-            if patience_count_crack >= self._early_stopping_patience:
-                print(f"Early stopping triggered after {epoch} epochs. No improvement for {self._early_stopping_patience} epochs in F1 - CRACK.")
-                break
 
-            # f1 based early stopping Crack
-            if f1_per_class[1] > best_f1[1]:
-                best_f1[1] = f1_per_class[1]
-                patience_count_inactive = 0
+            macro_f1 = np.mean(f1_per_class)
+            if macro_f1 > best_f1:
+                best_f1 = macro_f1
+                patience_count = 0
                 checkpoint_needed = True
             else:
-                patience_count_inactive += 1
-            # early stopping
-            if patience_count_inactive >= self._early_stopping_patience:
-                print(f"Early stopping triggered after {epoch} epochs. No improvement for {self._early_stopping_patience} epochs in F1 - INACTIVE.")
+                patience_count += 1
+
+            if patience_count >= self._early_stopping_patience:
+                print(f"Early stopping triggered after {epoch} epochs. No improvement for {self._early_stopping_patience} epochs.")
                 break
            
             if checkpoint_needed:
+                # save model
                 self.save_checkpoint(epoch)
                 self.save_best_model(self._save_dir)
+
+                # save confusion matrix for best model
+                ConfusionMatrixDisplay(confusion_matrix, display_labels=["0_0", "1_0", "0_1", "1_1"]).plot(cmap="Blues", values_format="d")
+                plt.title("Confusion Matrix")
+                plt.savefig(self._save_dir / 'confusion_matrix.png')
 
         return train_losses, val_losses
