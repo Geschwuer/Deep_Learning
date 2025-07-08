@@ -220,4 +220,4 @@ class Trainer:
 
 
         self._logger("Training finished.\n")
-        return train_losses, val_losses
+        return train_losses, val_losses, f1_scores
