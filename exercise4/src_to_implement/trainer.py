@@ -27,18 +27,11 @@ class Trainer:
         self._save_dir = save_dir
 
         self._early_stopping_patience = early_stopping_patience
-        self._logger_path = save_dir / "training.log"
-
-        with open(self._logger_path, "w") as f:
-            f.write(f"# Training started: {datetime.datetime.now()}\n")
 
         if cuda:
             self._model = model.cuda()
             self._crit = crit.cuda()
 
-    def _logger(self, message: str):
-        with open(self._logger_path, "a") as f:
-            f.write(message + "\n")
 
             
     def save_checkpoint(self, epoch):
@@ -167,7 +160,7 @@ class Trainer:
         return val_loss, f1_per_class, cm
         
     
-    def fit(self, epochs=-1):
+    def fit(self, logger, epochs=-1 ):
         assert self._early_stopping_patience > 0 or epochs > 0, "Specify epochs or early stopping patience!"
         # create a list for the train and validation losses, and create a counter for the epoch 
         train_losses, val_losses, f1_scores = [], [], []
@@ -185,8 +178,8 @@ class Trainer:
             
             train_loss = self.train_epoch()
             val_loss, f1_per_class, confusion_matrix = self.val_test()
-            self._logger(f"Epoch: {epoch} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | F1 Score - macro: {np.mean(f1_per_class)} | F1 Score - Crack: {f1_per_class[0]} | F1 Score - Inactive: {f1_per_class[1]}")
-
+            logger._log(f"Epoch: {epoch} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | F1 Score - macro: {np.mean(f1_per_class)} | F1 Score - Crack: {f1_per_class[0]} | F1 Score - Inactive: {f1_per_class[1]}")
+            
             train_losses.append(train_loss)
             val_losses.append(val_loss)
             f1_scores.append(f1_per_class)
@@ -204,14 +197,14 @@ class Trainer:
 
             if patience_count >= self._early_stopping_patience:
                 print(f"Early stopping triggered after {epoch} epochs. No improvement for {self._early_stopping_patience} epochs.")
-                self._logger(f"Early stopping triggered after {epoch} epochs. No improvement for {self._early_stopping_patience} epochs.")
+                logger._log(f"Early stopping triggered after {epoch} epochs. No improvement for {self._early_stopping_patience} epochs.")
                 break
            
             if checkpoint_needed:
                 # save model
                 self.save_checkpoint(epoch)
                 self.save_best_model(self._save_dir)
-                self._logger(f"saved checkpoint model at epoch: {epoch}")
+                logger._log(f"saved checkpoint model at epoch: {epoch}")
 
                 # save confusion matrix for best model
                 ConfusionMatrixDisplay(confusion_matrix, display_labels=["0_0", "1_0", "0_1", "1_1"]).plot(cmap="Blues", values_format="d")
@@ -219,5 +212,5 @@ class Trainer:
                 plt.savefig(self._save_dir / 'confusion_matrix.png')
 
 
-        self._logger("Training finished.\n")
+        logger._log("Training finished.\n")
         return train_losses, val_losses

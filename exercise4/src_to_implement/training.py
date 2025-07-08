@@ -26,6 +26,8 @@ def run_training(
     from model import Model
     from trainer import Trainer
 
+    from logger import Logger
+
     # =============== load and prepare data ======================
     # load the data from the csv file and perform a train-test-split
     df = pd.read_csv("data.csv", sep=";")
@@ -74,8 +76,12 @@ def run_training(
         early_stopping_patience=early_stopping_patience
     )
 
+    logger = Logger(save_dir=run_dir)
+    logger._log("\nHyperparameters:")
+    logger._log(f"Epoch: {epochs} | learning_rate: {lr} | batch_size: {bs} | weight_decay: {weight_decay} | early_stopping_patience: {early_stopping_patience} | use_augmentation: {use_augmentation} \n")
+    logger._log("\n==============Logger metrics==============")
     # go, go, go... call fit on trainer
-    res = trainer.fit(epochs=epochs)
+    res = trainer.fit(logger=logger, epochs=epochs)
 
     # ====================== plot results =======================
     # training and validation loss
