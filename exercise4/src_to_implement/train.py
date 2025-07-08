@@ -42,11 +42,11 @@ trainer = Trainer(
     train_dl=train_loader,
     val_test_dl=val_loader,
     cuda=t.cuda.is_available(),
-    early_stopping_patience=7
+    early_stopping_patience=3
 )
 
 # go, go, go... call fit on trainer
-res = trainer.fit(epochs=50)
+res = trainer.fit(epochs=1)
 
 # plot the results
 plt.plot(np.arange(len(res[0])), res[0], label='train loss')

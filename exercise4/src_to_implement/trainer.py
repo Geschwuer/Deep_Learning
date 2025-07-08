@@ -138,20 +138,20 @@ class Trainer:
         all_preds = np.concatenate(all_preds)
         all_labels = np.concatenate(all_labels)
 
-        f1 = f1_score(all_labels, all_preds, average='macro', zero_division=0)
+        f1_per_class = f1_score(all_labels, all_preds, average=None, zero_division=0)
 
         # return the loss and print the calculated metrics
-        print(f"Validation Loss: {val_loss}, F1 Score: {f1}")
-        return val_loss, f1
+        print(f"Validation Loss: {val_loss} | F1 Score - Crack: {f1_per_class[0]} | F1 Score - Inactive: {f1_per_class[1]}")
+        return val_loss, f1_per_class
         
     
     def fit(self, epochs=-1):
         assert self._early_stopping_patience > 0 or epochs > 0, "Specify epochs or early stopping patience!"
         # create a list for the train and validation losses, and create a counter for the epoch 
         train_losses, val_losses, f1_scores = [], [], []
-        patience_count = 0
-        best_val = float("inf")
-        best_f1 = 0
+        patience_count_crack = 0
+        patience_count_inactive = 0
+        best_f1 = np.array([0.0, 0.0])
         epoch = 0
         
         while True:
@@ -161,11 +161,11 @@ class Trainer:
             epoch += 1
             print(f"\nEpoch {epoch}")
             train_loss = self.train_epoch()
-            val_loss, f1 = self.val_test()
+            val_loss, f1_per_class = self.val_test()
 
             train_losses.append(train_loss)
             val_losses.append(val_loss)
-            f1_scores.append(f1)
+            f1_scores.append(f1_per_class)
             
             # if validation loss decreased save model checkpoint
             # if val_loss < best_val:
@@ -175,17 +175,35 @@ class Trainer:
             # else:
             #     patience_count += 1
 
-            # f1 based early stopping
-            if f1 > best_f1:
-                best_f1 = f1
-                patience_count = 0
-                self.save_checkpoint(epoch)
+            checkpoint_needed = False
+            # f1 based early stopping Crack
+            if f1_per_class[0] > best_f1[0]:
+                best_f1[0] = f1_per_class[0]
+                patience_count_crack = 0
+                checkpoint_needed = True
             else:
-                patience_count += 1
-
+                patience_count_crack += 1
             # early stopping
-            if patience_count >= self._early_stopping_patience:
-                print(f"Early stopping triggered after {epoch} epochs. No improvement for {self._early_stopping_patience} epochs.")
+            if patience_count_crack >= self._early_stopping_patience:
+                print(f"Early stopping triggered after {epoch} epochs. No improvement for {self._early_stopping_patience} epochs in F1 - CRACK.")
                 break
+
+
+
+            # f1 based early stopping Crack
+            if f1_per_class[1] > best_f1[1]:
+                best_f1[1] = f1_per_class[1]
+                patience_count_inactive = 0
+                checkpoint_needed = True
+            else:
+                patience_count_inactive += 1
+            # early stopping
+            if patience_count_inactive >= self._early_stopping_patience:
+                print(f"Early stopping triggered after {epoch} epochs. No improvement for {self._early_stopping_patience} epochs in F1 - INACTIVE.")
+                break
+
+            
+            if checkpoint_needed:
+                self.save_checkpoint(epoch)
 
         return train_losses, val_losses
