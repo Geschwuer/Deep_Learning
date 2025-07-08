@@ -87,14 +87,7 @@ class ChallengeDataset(Dataset):
         return img_tensor, label_tensor
     
 
-
-
 class DataAugmenter:
-    """
-    Augmentiert unterrepräsentierte Klassen (crack oder inactive) durch gezielte Bildtransformationen.
-    Speichert die neuen Bilder ab und gibt ein erweitertes DataFrame zurück.
-    """
-
     def __init__(self, df: pd.DataFrame, base_path: str = "", output_dir: str = "augmented"):
         self.df = df.copy()
         self.base_path = Path(base_path)
@@ -104,39 +97,73 @@ class DataAugmenter:
         self.augmentations = [
             ("flip_h", T.RandomHorizontalFlip(p=1.0)),
             ("flip_v", T.RandomVerticalFlip(p=1.0)),
-            ("rot_15", T.RandomRotation(degrees=15)),
         ]
 
-    def augment_minority_classes(self) -> pd.DataFrame:
-        # Filter nur crack oder inactive == 1
-        minority_df = self.df[(self.df["crack"] == 1) | (self.df["inactive"] == 1)]
-
+    def augment_samples(self, df_subset: pd.DataFrame, n_samples: int, label_name: str) -> pd.DataFrame:
+        """Augmentiert gezielt n_samples Bilder aus df_subset"""
         new_rows = []
-        for _, row in tqdm(minority_df.iterrows(), total=len(minority_df), desc="Augmenting"):
+        df_to_augment = df_subset.sample(n=n_samples, replace=True, random_state=42)
+
+        for _, row in tqdm(df_to_augment.iterrows(), total=len(df_to_augment), desc=f"Augmenting {label_name}"):
             img_path = self.base_path / row["filename"]
             image = imread(img_path)
 
-            # Graustufenbilder zu RGB
             if image.ndim == 2 or image.shape[-1] == 1:
                 image = gray2rgb(image)
 
-            # Konvertieren in PIL-Format für torchvision Transforms
             pil_image = T.ToPILImage()(image)
 
             for suffix, aug in self.augmentations:
                 transformed = aug(pil_image)
-                new_name = img_path.stem + f"_{suffix}.png"
+                new_name = img_path.stem + f"_{label_name}_{suffix}.png"
                 save_path = self.output_dir / new_name
                 transformed.save(save_path)
 
-                # Neue Zeile für DataFrame
                 new_rows.append({
                     "filename": str(save_path),
                     "crack": row["crack"],
                     "inactive": row["inactive"]
                 })
 
-        # Kombinieren mit Original
-        df_augmented = pd.DataFrame(new_rows)
-        df_combined = pd.concat([self.df, df_augmented], ignore_index=True)
-        return df_combined
+                if len(new_rows) >= n_samples:
+                    break
+            if len(new_rows) >= n_samples:
+                break
+
+        return pd.DataFrame(new_rows)
+
+    def balance_dataset(self) -> pd.DataFrame:
+        # current class distribution
+        df = self.df
+        n_total = len(df)
+        target_per_class = n_total // 3
+
+        # seperate classes
+        df_crack = df[df["crack"] == 1]
+        df_inactive = df[df["inactive"] == 1]
+        df_clean = df[(df["crack"] == 0) & (df["inactive"] == 0)]
+
+        # calculate number of addidtional samples
+        n_crack_needed = max(0, target_per_class - len(df_crack))
+        n_inactive_needed = max(0, target_per_class - len(df_inactive))
+        n_clean_keep = target_per_class
+
+        # augment
+        df_aug_crack = self.augment_samples(df_crack, n_crack_needed, "crack") if n_crack_needed > 0 else pd.DataFrame()
+        df_aug_inactive = self.augment_samples(df_inactive, n_inactive_needed, "inactive") if n_inactive_needed > 0 else pd.DataFrame()
+
+        # undersampling
+        df_clean_sampled = df_clean.sample(n=n_clean_keep, random_state=42)
+
+        # combine dfs
+        balanced_df = pd.concat([
+            df_crack,
+            df_inactive,
+            df_clean_sampled,
+            df_aug_crack,
+            df_aug_inactive
+        ], ignore_index=True)
+
+        # Shuffle
+        balanced_df = balanced_df.sample(frac=1, random_state=42).reset_index(drop=True)
+        return balanced_df

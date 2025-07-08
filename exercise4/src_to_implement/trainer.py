@@ -14,6 +14,7 @@ class Trainer:
                  train_dl=None,                # Training data set
                  val_test_dl=None,             # Validation (or test) data set
                  cuda=True,                    # Whether to use the GPU
+                 save_dir = "",                # trainings/run_YYYYMMDD_HHMMSS/
                  early_stopping_patience=-1):  # The patience for early stopping
         self._model = model
         self._crit = crit
@@ -21,6 +22,7 @@ class Trainer:
         self._train_dl = train_dl
         self._val_test_dl = val_test_dl
         self._cuda = cuda
+        self._save_dir = save_dir
 
         self._early_stopping_patience = early_stopping_patience
 
@@ -31,6 +33,10 @@ class Trainer:
     def save_checkpoint(self, epoch):
         os.makedirs("checkpoints", exist_ok=True)
         t.save({'state_dict': self._model.state_dict()}, 'checkpoints/checkpoint_{:03d}.ckp'.format(epoch))
+
+    def save_best_model(self, save_dir):
+        os.makedirs("trainings", exist_ok=True)
+        t.save({'state_dict': self._model.state_dict()}, save_dir / 'model.ckp')
     
     def restore_checkpoint(self, epoch_n):
         ckp = t.load('checkpoints/checkpoint_{:03d}.ckp'.format(epoch_n), 'cuda' if self._cuda else None)
@@ -188,8 +194,6 @@ class Trainer:
                 print(f"Early stopping triggered after {epoch} epochs. No improvement for {self._early_stopping_patience} epochs in F1 - CRACK.")
                 break
 
-
-
             # f1 based early stopping Crack
             if f1_per_class[1] > best_f1[1]:
                 best_f1[1] = f1_per_class[1]
@@ -201,9 +205,9 @@ class Trainer:
             if patience_count_inactive >= self._early_stopping_patience:
                 print(f"Early stopping triggered after {epoch} epochs. No improvement for {self._early_stopping_patience} epochs in F1 - INACTIVE.")
                 break
-
-            
+           
             if checkpoint_needed:
                 self.save_checkpoint(epoch)
+                self.save_best_model(self._save_dir)
 
         return train_losses, val_losses
