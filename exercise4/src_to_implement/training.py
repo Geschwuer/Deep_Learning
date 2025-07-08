@@ -26,6 +26,7 @@ def run_training(
     from model import Model
     from trainer import Trainer
 
+    # =============== load and prepare data ======================
     # load the data from the csv file and perform a train-test-split
     df = pd.read_csv("data.csv", sep=";")
     train, val = train_test_split(df, test_size=0.2, random_state=seed)
@@ -35,21 +36,14 @@ def run_training(
         train = augmenter.balance_dataset()
         train.to_csv("augmented_data.csv", index = False)
 
-    # class distributio
-    df["class_combo"] = df.apply(lambda row: f"{row['crack']}_{row['inactive']}", axis=1)
-    sns.countplot(x="class_combo", data=df)
-    plt.title("class distribution after augmentation")
-    plt.xlabel("crack | inactive")
-    plt.ylabel("number of samples")
-    plt.savefig('DataAugmentation.png')
-
     # set up data loading for the training and validation set each using t.utils.data.DataLoader and ChallengeDataset objects
     train_ds = ChallengeDataset(data=train, mode="train")
     val_ds = ChallengeDataset(data=val, mode="val")
 
     train_loader = DataLoader(train_ds, batch_size=bs, shuffle=True)
-    val_loader = DataLoader(val_ds, batch_size=bs, shuffle=False)
+    val_loader = DataLoader(val_ds, batch_size=bs, shuffle=True)
 
+    # ================== set up model, optimizer and trainer ===================
     # create an instance of our ResNet model
     model = Model(num_classes=2)
     # set up loss function and optimizer
@@ -83,13 +77,18 @@ def run_training(
     # go, go, go... call fit on trainer
     res = trainer.fit(epochs=epochs)
 
-    # plot the results
+    # ====================== plot results =======================
+    # training and validation loss
     plt.plot(np.arange(len(res[0])), res[0], label='train loss')
     plt.plot(np.arange(len(res[1])), res[1], label='val loss')
     plt.yscale('log')
     plt.legend()
-    plt.savefig('losses.png')
+    plt.savefig(run_dir / 'losses.png')
 
-
-if __name__ == "__main__":
-    run_training()
+    # class distribution of training dataset
+    train["class_combo"] = train.apply(lambda row: f"{row['crack']}_{row['inactive']}", axis=1)
+    sns.countplot(x="class_combo", data=train)
+    plt.title("class distribution after augmentation")
+    plt.xlabel("crack | inactive")
+    plt.ylabel("number of samples")
+    plt.savefig(run_dir / 'training_data_distribution.png')
