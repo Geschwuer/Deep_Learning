@@ -87,16 +87,18 @@ def run_training(
     # training and validation loss
     train_loss = res[0]
     val_loss = res[1]
-    f1_crack = res[2][0][0]
-    f1_inactive = res[2][0][1]
+    f1_crack = np.array(res[2])[:,0]
+    f1_inactive = np.array(res[2])[:,1]
+
+    epochs_trained = np.arange(1, len(train_loss) + 1, 1)
 
     plt.figure(figsize=(12, 6))
     plt.suptitle("Model Training", fontsize=14)
     
     # --- Subplot 1: F1 Scores ---
     plt.subplot(1, 2, 1)
-    plt.plot(epochs, f1_crack, label="F1 Crack", color="blue")
-    plt.plot(epochs, f1_inactive, label="F1 Inactive", color="red")
+    plt.plot(epochs_trained, f1_crack, label="F1 Crack", color="blue")
+    plt.plot(epochs_trained, f1_inactive, label="F1 Inactive", color="red")
     plt.xlabel("Epochs")
     plt.ylabel("F1 Score")
     plt.title("F1 Scores")
@@ -106,8 +108,8 @@ def run_training(
 
     # --- Subplot 2: Loss ---
     plt.subplot(1, 2, 2)
-    plt.plot(epochs, train_loss, label="Training Data", color="blue")
-    plt.plot(epochs, val_loss, label="Validation Data", color="red")
+    plt.plot(epochs_trained, train_loss, label="Training Data", color="blue")
+    plt.plot(epochs_trained, val_loss, label="Validation Data", color="red")
     plt.xlabel("Epochs")
     plt.ylabel("Loss")
     plt.title("Training Loss")
