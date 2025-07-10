@@ -10,9 +10,27 @@ import pandas as pd
 from typing import Union
 from typing import Tuple
 from tqdm.autonotebook import tqdm
+from PIL import Image
 
 train_mean = [0.59685254, 0.59685254, 0.59685254]
 train_std = [0.16043035, 0.16043035, 0.16043035]
+
+class InactiveContrastBoost:
+    def __init__(self, active_label):
+        self.active_label = active_label
+
+    def __call__(self, img):
+        if self.active_label == 1:
+            return self.boost_dark_regions(img)
+        return img
+
+    def boost_dark_regions(self, img):
+        np_img = np.array(img).astype(np.float32)
+        dark_mask = np_img < 50
+        np_img[dark_mask] *= 0.5  # tiefer verdunkeln
+        np_img = np.clip(np_img, 0, 255).astype(np.uint8)
+        return Image.fromarray(np_img)
+
 
 
 class ChallengeDataset(Dataset):
@@ -68,6 +86,17 @@ class ChallengeDataset(Dataset):
         img_path = Path(record["filename"])
         img = imread(img_path)
 
+        # Boost if inactive == 1
+        if self.mode == "train" and record["inactive"] == 1:
+            pil_img = Image.fromarray(img).convert("L")  # Ensure grayscale
+            boosted = InactiveContrastBoost(active_label=1)(pil_img)
+            img = np.array(boosted)
+
+            save_dir = Path("boosted_previews")
+            save_dir.mkdir(exist_ok=True)
+            save_path = save_dir / f"boosted_{img_path.stem}.png"
+            boosted.save(save_path)
+
         # Convert grayscale image to RGB if necessary
         if img.ndim == 2 or img.shape[-1] == 1:
             img = gray2rgb(img)
@@ -83,6 +112,7 @@ class ChallengeDataset(Dataset):
 
         # Apply transformations to image
         img_tensor = self.transform(img)
+
 
         return img_tensor, label_tensor
     
