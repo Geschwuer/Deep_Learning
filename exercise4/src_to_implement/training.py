@@ -5,6 +5,7 @@ def run_training(
        weight_decay = 1e-4,
        early_stopping_patience = 5,
        use_augmentation = True,
+       use_wrs = False,
        model_save_dir = "trainings",
        seed = 42 
 ):
@@ -12,7 +13,7 @@ def run_training(
     import torch as t
     import torch.nn as nn
     import torch.optim as optim
-    from torch.utils.data import DataLoader
+    from torch.utils.data import DataLoader, WeightedRandomSampler
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
@@ -31,19 +32,46 @@ def run_training(
     # =============== load and prepare data ======================
     # load the data from the csv file and perform a train-test-split
     df = pd.read_csv("data.csv", sep=";")
-    train, val = train_test_split(df, test_size=0.2, random_state=seed)
+    train_raw, val = train_test_split(df, test_size=0.2, random_state=seed)
 
     if use_augmentation:
-        augmenter = DataAugmenter(train)
+        augmenter = DataAugmenter(train_raw)
         train = augmenter.balance_dataset()
         train.to_csv("augmented_data.csv", index = False)
+    elif use_wrs:
+        # Kombiniere crack + inactive als String → z. B. "1_0"
+        train = train_raw
+        label_strs = train.apply(lambda row: f"{row['crack']}_{row['inactive']}", axis=1)
+
+        # Häufigkeit pro Kombi zählen
+        from collections import Counter
+        class_counts = Counter(label_strs)
+        weights = {cls: 1.0 / count for cls, count in class_counts.items()}
+
+        # Sample-Weights pro Beispiel
+        sample_weights = [weights[label] for label in label_strs]
+
+        # Sampler erzeugen
+        sampler = WeightedRandomSampler(
+            weights=t.DoubleTensor(sample_weights),
+            num_samples=len(sample_weights),
+            replacement=True
+        )
+
+
+
+
 
     # set up data loading for the training and validation set each using t.utils.data.DataLoader and ChallengeDataset objects
     train_ds = ChallengeDataset(data=train, mode="train")
     val_ds = ChallengeDataset(data=val, mode="val")
 
-    train_loader = DataLoader(train_ds, batch_size=bs, shuffle=True)
-    val_loader = DataLoader(val_ds, batch_size=bs, shuffle=False)
+    if use_wrs:
+        train_loader = DataLoader(train_ds, batch_size=bs, sampler=sampler)
+    else:
+        train_loader = DataLoader(train_ds, batch_size=bs, shuffle=True)
+
+    val_loader = DataLoader(val_ds, batch_size=bs, shuffle=True)
 
     # ================== set up model, optimizer and trainer ===================
     # create an instance of our ResNet model
@@ -120,11 +148,23 @@ def run_training(
     plt.savefig(run_dir / "f1_and_loss_plot.png")
     plt.close()
 
-    # class distribution of training dataset
-    train["class_combo"] = train.apply(lambda row: f"{row['crack']}_{row['inactive']}", axis=1)
-    sns.countplot(x="class_combo", data=train)
-    plt.title("class distribution after augmentation")
+    # class distribution of training dataset before augmentation
+    pd.options.mode.chained_assignment = None  # <--- WARNUNGEN DEAKTIVIEREN
+    train_raw["class_combo"] = train_raw.apply(lambda row: f"{row['crack']}_{row['inactive']}", axis=1)
+    sns.countplot(x="class_combo", data=train_raw)
+    plt.title("class distribution BEFORE augmentation")
     plt.xlabel("crack | inactive")
     plt.ylabel("number of samples")
-    plt.savefig(run_dir / 'training_data_distribution.png')
+    plt.tight_layout()
+    plt.savefig(run_dir / 'training_data_distribution_before_aug.png')
+    plt.close()
+
+    # class distribution of training dataset after augmentation
+    train["class_combo"] = train.apply(lambda row: f"{row['crack']}_{row['inactive']}", axis=1)
+    sns.countplot(x="class_combo", data=train)
+    plt.title("class distribution AFTER augmentation")
+    plt.xlabel("crack | inactive")
+    plt.ylabel("number of samples")
+    plt.tight_layout()
+    plt.savefig(run_dir / 'training_data_distribution_after_aug.png')
     plt.close()
