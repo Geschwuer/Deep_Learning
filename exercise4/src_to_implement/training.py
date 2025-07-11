@@ -1,4 +1,50 @@
+def create_dataset(
+    data_csv="",
+    total_samples=500,
+    num_augs={"0_0": -1, "0_1": 49, "1_0": 2, "1_1": 5},
+    output_dir="augmented",
+    output_train="train.csv",
+    output_val="val.csv"
+):
+    from data import DataAugmenter
+    import pandas as pd
+    from sklearn.model_selection import train_test_split
+
+    # load and split data
+    df = pd.read_csv(data_csv, sep=";")
+    train, val = train_test_split(df, test_size=0.2, random_state=42)
+
+    # add class combo column to df
+    train["class_combo"] = train.apply(lambda row: f"{row['crack']}_{row['inactive']}", axis=1)
+    class_combos = ["0_0", "0_1", "1_0", "1_1"]
+
+    train_balanced = pd.DataFrame()
+
+    for class_combo in class_combos:
+        train_class = train[train["class_combo"] == class_combo].copy()
+
+        if num_augs.get(class_combo, -1) > 0:
+            augmenter = DataAugmenter(output_dir=output_dir, num_augs=num_augs[class_combo])
+            new_rows = augmenter.augment(train_class)
+            train_class = pd.concat([train_class, new_rows], ignore_index=True)
+
+        # sample
+        train_class = train_class.sample(n=total_samples, replace=True, random_state=42)
+        train_balanced = pd.concat([train_balanced, train_class], ignore_index=True)
+
+    # save csv
+    train_balanced.to_csv(output_train, index=False, sep=";")
+    val.to_csv(output_val, index=False, sep=";")
+
+    print(f"Train set saved to {output_train} ({len(train_balanced)} samples)")
+    print(f"Val set saved to {output_val} ({len(val)} samples)")
+
+    return train_balanced, val
+
+
 def run_training(
+       train,
+       val,
        epochs = 40,
        lr = 1e-3,
        bs = 32,
@@ -18,7 +64,6 @@ def run_training(
     import numpy as np
     import pandas as pd
     from sklearn.model_selection import train_test_split
-    from data import DataAugmenter
     import seaborn as sns
     import datetime
     from pathlib import Path
@@ -26,51 +71,14 @@ def run_training(
     from data import ChallengeDataset
     from model import Model
     from trainer import Trainer
-
     from logger import Logger
-
-    # =============== load and prepare data ======================
-    # load the data from the csv file and perform a train-test-split
-    df = pd.read_csv("data.csv", sep=";")
-    train_raw, val = train_test_split(df, test_size=0.2, random_state=seed)
-
-    if use_augmentation:
-        augmenter = DataAugmenter(train_raw)
-        train = augmenter.balance_dataset()
-        train.to_csv("augmented_data.csv", index = False)
-    elif use_wrs:
-        # Kombiniere crack + inactive als String → z. B. "1_0"
-        train = train_raw
-        label_strs = train.apply(lambda row: f"{row['crack']}_{row['inactive']}", axis=1)
-
-        # Häufigkeit pro Kombi zählen
-        from collections import Counter
-        class_counts = Counter(label_strs)
-        weights = {cls: 1.0 / count for cls, count in class_counts.items()}
-
-        # Sample-Weights pro Beispiel
-        sample_weights = [weights[label] for label in label_strs]
-
-        # Sampler erzeugen
-        sampler = WeightedRandomSampler(
-            weights=t.DoubleTensor(sample_weights),
-            num_samples=len(sample_weights),
-            replacement=True
-        )
-
-
-
-
 
     # set up data loading for the training and validation set each using t.utils.data.DataLoader and ChallengeDataset objects
     train_ds = ChallengeDataset(data=train, mode="train")
     val_ds = ChallengeDataset(data=val, mode="val")
 
-    if use_wrs:
-        train_loader = DataLoader(train_ds, batch_size=bs, sampler=sampler)
-    else:
-        train_loader = DataLoader(train_ds, batch_size=bs, shuffle=True)
 
+    train_loader = DataLoader(train_ds, batch_size=bs, shuffle=True)
     val_loader = DataLoader(val_ds, batch_size=bs, shuffle=True)
 
     # ================== set up model, optimizer and trainer ===================
@@ -149,15 +157,15 @@ def run_training(
     plt.close()
 
     # class distribution of training dataset before augmentation
-    pd.options.mode.chained_assignment = None  # <--- WARNUNGEN DEAKTIVIEREN
-    train_raw["class_combo"] = train_raw.apply(lambda row: f"{row['crack']}_{row['inactive']}", axis=1)
-    sns.countplot(x="class_combo", data=train_raw)
-    plt.title("class distribution BEFORE augmentation")
-    plt.xlabel("crack | inactive")
-    plt.ylabel("number of samples")
-    plt.tight_layout()
-    plt.savefig(run_dir / 'training_data_distribution_before_aug.png')
-    plt.close()
+    # pd.options.mode.chained_assignment = None  # <--- WARNUNGEN DEAKTIVIEREN
+    # train_raw["class_combo"] = train_raw.apply(lambda row: f"{row['crack']}_{row['inactive']}", axis=1)
+    # sns.countplot(x="class_combo", data=train_raw)
+    # plt.title("class distribution BEFORE augmentation")
+    # plt.xlabel("crack | inactive")
+    # plt.ylabel("number of samples")
+    # plt.tight_layout()
+    # plt.savefig(run_dir / 'training_data_distribution_before_aug.png')
+    # plt.close()
 
     # class distribution of training dataset after augmentation
     train["class_combo"] = train.apply(lambda row: f"{row['crack']}_{row['inactive']}", axis=1)
