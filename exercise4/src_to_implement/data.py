@@ -115,3 +115,53 @@ class ChallengeDataset(Dataset):
 
 
         return img_tensor, label_tensor
+    
+
+class DataAugmenter:
+    def __init__(self, output_dir="augmented", num_augs=1):
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(exist_ok=True, parents=True)
+        self.num_augs = num_augs
+
+        self.aug_tfs = [
+            T.ToPILImage(),
+            T.RandomHorizontalFlip(p=0.5),
+            T.RandomVerticalFlip(p=0.5),
+            T.ColorJitter(brightness=0.4, contrast=0.2),
+        ]
+        self.transform = T.Compose(self.aug_tfs)
+
+    def augment(self, df: pd.DataFrame) -> pd.DataFrame:
+        new_rows = []
+
+        for idx, row in df.iterrows():
+            filename = Path(row["filename"])
+            img = imread(filename)
+
+            # Convert to RGB if needed
+            if img.ndim == 2 or img.shape[-1] == 1:
+                img = gray2rgb(img)
+            if img.dtype != np.uint8:
+                img = (img * 255).astype(np.uint8) if img.max() <= 1 else img.astype(np.uint8)
+
+            for i in range(self.num_augs):
+                img_aug = self.transform(img)
+
+                # Create new filename
+                stem = filename.stem
+                suffix = filename.suffix if filename.suffix else ".png"
+                new_name = f"{stem}_aug{i+1}{suffix}"
+                save_path = self.output_dir / new_name
+
+                # Save image
+                img_aug.save(save_path)
+
+                # Append new row
+                new_rows.append({
+                    "filename": str(save_path),
+                    "crack": row["crack"],
+                    "inactive": row["inactive"],
+                    "class_combo": row["class_combo"]
+                })
+
+        return pd.DataFrame(new_rows)
